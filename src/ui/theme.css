@@ -1,0 +1,77 @@
+/* Token di design condivisi. Tutti i componenti usano SOLO queste variabili. */
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f0f2f5;
+  --border: #dde1e7;
+  --text: #1b1f24;
+  --text-2: #5b6470;
+  --accent: #2563eb;
+  --accent-soft: #dbe7ff;
+  --ok: #15803d;
+  --ok-soft: #dcfce7;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --err: #b91c1c;
+  --err-soft: #fee2e2;
+  --info: #0e7490;
+  --info-soft: #cffafe;
+  /* colori dei campi di un'istruzione (opcode / registri / immediato) */
+  --f-op: #7c3aed;
+  --f-rs1: #0891b2;
+  --f-rs2: #ea580c;
+  --f-rd: #16a34a;
+  --f-imm: #db2777;
+  --f-func: #6b7280;
+  /* evidenziazioni */
+  --hl-next: #fff3b0;
+  --hl-done: #e3f0ff;
+  --hl-active: #2563eb;
+  --mono: 'JetBrains Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 8px rgba(0, 0, 0, 0.04);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #0f1216;
+  --panel: #171b21;
+  --panel-2: #1f242c;
+  --border: #2c333d;
+  --text: #e6e9ee;
+  --text-2: #9aa4b2;
+  --accent: #60a5fa;
+  --accent-soft: #1e3355;
+  --ok: #4ade80;
+  --ok-soft: #12321f;
+  --warn: #fbbf24;
+  --warn-soft: #3a2c0b;
+  --err: #f87171;
+  --err-soft: #3b1414;
+  --info: #22d3ee;
+  --info-soft: #0b3038;
+  --f-op: #a78bfa;
+  --f-rs1: #22d3ee;
+  --f-rs2: #fb923c;
+  --f-rd: #4ade80;
+  --f-imm: #f472b6;
+  --f-func: #9ca3af;
+  --hl-next: #4a4310;
+  --hl-done: #1b2a40;
+  --hl-active: #60a5fa;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+}
+code, .mono { font-family: var(--mono); }
+button { font: inherit; }
