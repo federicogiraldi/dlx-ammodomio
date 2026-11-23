@@ -410,3 +410,8 @@ input.bad { border-color: var(--err); background: var(--err-soft); }
 .panel { min-width: 0; }
 .devices .row { flex-wrap: wrap; }
 .devices select { max-width: 100%; min-width: 0; }
+
+/* schermata di errore (ErrorBoundary) */
+.crash { max-width: 640px; margin: 48px auto; padding: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.crash h1 { font-size: 20px; margin: 0 0 12px; }
+.crash pre { white-space: pre-wrap; }

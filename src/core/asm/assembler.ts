@@ -348,10 +348,14 @@ interface Stmt {
   size: number;
 }
 
+/** dimensione massima di una singola .space (evita che un programma blocchi la pagina) */
+export const MAX_SPACE = 0x40000; // 256 KiB
+
 const DIRECTIVES = ['.org', '.text', '.data', '.word', '.half', '.byte', '.space', '.ascii', '.asciiz', '.align', '.equ', '.global', '.globl', '.set'];
 
 export function assemble(source: string, opts: AsmOptions = {}): Program {
-  const lines = source.split(/\r?\n/);
+  // tutte le forme di fine riga: CRLF (Windows), LF, CR isolato (vecchi Mac), separatori Unicode
+  const lines = source.split(/\r\n|\r|\n|\u2028|\u2029/);
   const diagnostics: Diagnostic[] = [];
   const symbols = new Map<string, SymbolInfo>();
   const stmts: Stmt[] = [];
@@ -399,7 +403,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
     if (!trimmed) continue;
     const lead = rest.length - rest.trimStart().length;
     const firstCol = col + lead;
-    const mm = trimmed.match(/^(\S+)\s*(.*)$/)!;
+    const mm = trimmed.match(/^(\S+)\s*([\s\S]*)$/)!;
     let name = mm[1];
     let opsText = mm[2];
     let opsCol = firstCol + trimmed.indexOf(opsText, name.length);
@@ -477,6 +481,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
         return;
       case '.align': {
         const n = ops.length ? ev(ops[0]) : 2;
+        if (!Number.isInteger(n) || n < 0 || n > 16) throw new AsmError(txt(`.align n allinea a 2^n byte: n deve essere un intero tra 0 e 16 (qui vale ${n}).`, `.align n aligns to 2^n bytes: n must be a whole number between 0 and 16 (here it is ${n}).`), ops[0]?.col ?? col);
         const a = 2 ** n;
         loc[section] = Math.ceil(loc[section] / a) * a;
         for (const l of labelsThisLine) symbols.get(l)!.value = loc[section] >>> 0;
@@ -501,6 +506,8 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
       case '.space': {
         if (!ops.length) throw new AsmError(txt('.space vuole il numero di byte', '.space needs a byte count'), col);
         size = ev(ops[0]);
+        if (!Number.isInteger(size) || size < 0) throw new AsmError(txt(`.space vuole un numero intero di byte ≥ 0 (qui vale ${size}).`, `.space needs a whole byte count ≥ 0 (here it is ${size}).`), ops[0].col, ops[0].text.length);
+        if (size > MAX_SPACE) throw new AsmError(txt(`.space ${size} è troppo grande: il massimo è ${MAX_SPACE} byte (256 KiB). Per gli esercizi bastano poche centinaia di byte.`, `.space ${size} is too large: the maximum is ${MAX_SPACE} bytes (256 KiB).`), ops[0].col, ops[0].text.length);
         break;
       }
       case '.ascii':

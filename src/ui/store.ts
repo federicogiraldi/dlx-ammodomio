@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { Machine, DEFAULT_MAP, RunOutcome } from '../core/machine';
 import { Program, assemble } from '../core/asm/assembler';
 import { StepResult } from '../core/cpu/cpu';
-import { DeviceConfig } from '../core/bus/devices';
+import { DeviceConfig, KIND_INFO } from '../core/bus/devices';
+import { validateMap } from '../core/bus/bus';
 import { SimError, Txt, txt } from '../core/util';
 import { Lang, Key } from '../i18n';
 
@@ -14,13 +15,18 @@ export interface Status {
 }
 
 const LS = {
-  get<T>(k: string, def: T): T {
+  /** legge una chiave dlx.*; se il valore manca, è corrotto o non supera `ok`, restituisce il default (e rimuove la chiave guasta) */
+  get<T>(k: string, def: T, ok: (v: unknown) => boolean = () => true): T {
     try {
       const v = localStorage.getItem('dlx.' + k);
-      return v === null ? def : (JSON.parse(v) as T);
+      if (v === null) return def;
+      const parsed: unknown = JSON.parse(v);
+      if (ok(parsed)) return parsed as T;
     } catch {
-      return def;
+      /* JSON non valido */
     }
+    try { localStorage.removeItem('dlx.' + k); } catch { /* ignora */ }
+    return def;
   },
   set(k: string, v: unknown) {
     try {
@@ -46,19 +52,52 @@ loop:   ADD  R2,R2,R1     ; somma += contatore
         HALT              ; fine
 `;
 
+const isStr = (v: unknown) => typeof v === 'string';
+
+/** una mappa letta da localStorage è usabile solo se ha la forma giusta e supera validateMap */
+function isValidMap(v: unknown): boolean {
+  if (!Array.isArray(v) || v.length === 0) return false;
+  const shapeOk = v.every(
+    (d) =>
+      d && typeof d === 'object' &&
+      typeof d.id === 'string' && typeof d.name === 'string' &&
+      typeof d.kind === 'string' && d.kind in KIND_INFO &&
+      Number.isFinite(d.base) && Number.isFinite(d.size),
+  );
+  if (!shapeOk) return false;
+  try {
+    return validateMap(v as DeviceConfig[]).length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** lunghezza massima del codice in un link condiviso (circa 48 KB di sorgente) */
+const MAX_HASH = 65536;
+
 function initialSource(): string {
+  const saved = LS.get<string>('source', WELCOME, isStr);
   try {
     const h = location.hash;
     if (h.startsWith('#code=')) {
+      // il link viene letto una volta sola: lo togliamo dall'URL così una ricarica non cancella le modifiche
+      try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignora */ }
       const b64 = h.slice(6);
+      if (b64.length > MAX_HASH) return saved;
       const bin = atob(decodeURIComponent(b64));
       const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-      return new TextDecoder().decode(bytes);
+      const fromLink = new TextDecoder().decode(bytes);
+      // se l'utente aveva un suo programma diverso, chiediamo prima di sostituirlo
+      if (saved !== WELCOME && saved.trim() !== fromLink.trim() && typeof confirm === 'function') {
+        const yes = confirm('Aprire il programma del link condiviso?\nIl programma che avevi nell\'editor verrà sostituito (Annulla = tieni il tuo).\n\nOpen the shared program? Your current program will be replaced (Cancel = keep yours).');
+        if (!yes) return saved;
+      }
+      return fromLink;
     }
   } catch {
     /* link non valido */
   }
-  return LS.get('source', WELCOME);
+  return saved;
 }
 
 export function shareLink(source: string): string {
@@ -130,11 +169,19 @@ function touchedOf(r?: StepResult): Set<number> {
 }
 
 export const useStore = create<State>((set, get) => {
-  const map = LS.get<DeviceConfig[]>('map', DEFAULT_MAP);
+  const map = LS.get<DeviceConfig[]>('map', DEFAULT_MAP, isValidMap);
   const machine = new Machine(DEFAULT_MAP);
-  if (map !== DEFAULT_MAP) machine.setMap(map);
-  const source = initialSource();
-  machine.load(source);
+  let source = initialSource();
+  try {
+    if (map !== DEFAULT_MAP) machine.setMap(map);
+    machine.load(source);
+  } catch {
+    // stato salvato inutilizzabile: si riparte da zero invece di lasciare la pagina bianca
+    try { localStorage.removeItem('dlx.map'); localStorage.removeItem('dlx.source'); } catch { /* ignora */ }
+    machine.setMap(DEFAULT_MAP);
+    source = WELCOME;
+    machine.load(source);
+  }
   const breakLines = new Set<number>();
 
   const outcome = (o: RunOutcome) => {
@@ -162,11 +209,11 @@ export const useStore = create<State>((set, get) => {
     dirty: false,
     last: undefined,
     running: false,
-    speed: LS.get('speed', 4),
+    speed: LS.get('speed', 4, (v) => typeof v === 'number' && v >= 0.5 && v <= 100000),
     status: { kind: 'info', text: 'ready' },
     runtimeError: null,
-    lang: LS.get<Lang>('lang', 'it'),
-    theme: LS.get('theme', window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+    lang: LS.get<Lang>('lang', 'it', (v) => v === 'it' || v === 'en'),
+    theme: LS.get<'light' | 'dark'>('theme', window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', (v) => v === 'light' || v === 'dark'),
     tab: 'explain',
     breakLines,
     trapOnOverflow: false,
@@ -272,9 +319,29 @@ export const useStore = create<State>((set, get) => {
     runToEnd() {
       get().pause();
       if (!get().ensureLoaded()) return;
-      const o = get().machine.run(500000);
-      outcome(o);
-      set((s) => ({ version: s.version + 1 }));
+      // esecuzione a blocchi: tra un blocco e l'altro il browser ridisegna e il pulsante Pausa resta usabile
+      const LIMIT = 500000;
+      const CHUNK = 2000;
+      let done = 0;
+      let first = true;
+      set({ running: true, status: { kind: 'info', text: 'running' } });
+      const tick = () => {
+        if (!get().running) return;
+        const m = get().machine;
+        const o = m.run(Math.min(CHUNK, LIMIT - done), first);
+        first = false;
+        done += o.steps;
+        if (o.reason !== 'limit' || done >= LIMIT) {
+          set({ running: false });
+          outcome(o);
+          set((s) => ({ version: s.version + 1 }));
+          return;
+        }
+        // aggiorna i contatori in toolbar senza ridisegnare tutti i pannelli a ogni blocco
+        if (done % (CHUNK * 10) === 0) set((s) => ({ version: s.version + 1 }));
+        timer = window.setTimeout(tick, 0);
+      };
+      tick();
     },
 
     reset() {

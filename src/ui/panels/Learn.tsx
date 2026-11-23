@@ -37,7 +37,14 @@ export function Md({ text }: { text: string }) {
 }
 
 const LS_DONE = 'dlx.doneExercises';
-const getDone = (): string[] => { try { return JSON.parse(localStorage.getItem(LS_DONE) ?? '[]'); } catch { return []; } };
+const getDone = (): string[] => {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(LS_DONE) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
 const saveDone = (d: string[]) => { try { localStorage.setItem(LS_DONE, JSON.stringify(d)); } catch { /* ignora */ } };
 
 function runCheck(ex: Exercise, source: string): { results: CheckResult[]; error?: string; steps: number } {

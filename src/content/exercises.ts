@@ -81,12 +81,13 @@ const DISPATCH = `        LHI  R20,0xC000         ; base STARTUP
 
 const SOMMA_DATA = [5, -3, 12, 7, 0, 20, -8, 1];
 const MAX_DATA = [7, -2, 15, -30, 4, 99, -100, 42, 98, 3];
-const PARI_DATA = [3, 8, 15, 22, 7, 10, 41, -64, 5, 0, 18, -9];
+const PARI_DATA = [3, 8, 15, 22, 7, 10, 40, -64, 5, 0, 18, -9];
 const ABS_DATA = [-5, 12, -300, 0, 7, -1];
 const STRINGA = 'Ciao, DLX!';
 const ECO_IN = 'Ciao dlx 2024!';
 const ECO_OUT = 'CIAO DLX 2024!';
-const PARI_CHARS = ascii('ABCDEFGH'); // B, D, F, H sono pari: 4 pari
+// B, D, F, H sono pari (4), A e C dispari (2): contare i dispari o tutti i caratteri non porta al risultato giusto
+const PARI_CHARS = ascii('ABCDFH');
 const BYTES_2016 = [10, 200, 100, 129, 50, 255];
 
 // ------------------------------------------------------------------
@@ -234,7 +235,7 @@ A number is even if its bit 0 is 0.`,
         HALT
 
         .data
-vettore: .word 3, 8, 15, 22, 7, 10, 41, -64, 5, 0, 18, -9
+vettore: .word 3, 8, 15, 22, 7, 10, 40, -64, 5, 0, 18, -9
 `,
     hints: [
       txt('ANDI Rd,Rs,1 isola il bit 0: vale 0 se il numero è pari.', 'ANDI Rd,Rs,1 isolates bit 0: it is 0 if the number is even.'),
@@ -256,7 +257,7 @@ Dispari: BNEZ R3,Loop
         HALT
 
         .data
-vettore: .word 3, 8, 15, 22, 7, 10, 41, -64, 5, 0, 18, -9
+vettore: .word 3, 8, 15, 22, 7, 10, 40, -64, 5, 0, 18, -9
 `,
     check: (m) => [checkWord(m, 0xe0000200, PARI_DATA.filter((x) => x % 2 === 0).length, txt('Numero di pari', 'Number of even values')), checkHalt(m)],
   },
@@ -594,7 +595,7 @@ L'handler deve:
 - altrimenti (interrupt dal contatore): azzerare il contatore e **invertire il LED** (CS_SWITCH_LED);
 - tornare con RFE.
 
-Puoi usare R20..R25 senza ripristinarli. Il test invia "ABCDEFGH": i caratteri pari (B, D, F, H) sono 4, quindi alla fine il LED deve essere acceso (una sola inversione) e il contatore azzerato.`,
+Puoi usare R20..R25 senza ripristinarli. Il test invia "ABCDFH": i caratteri pari (B, D, F, H) sono 4 e i dispari (A, C) 2, quindi alla fine il LED deve essere acceso (una sola inversione) e il contatore azzerato.`,
       `*Inspired by the exam of 1 September 2020 (Calcolatori Elettronici T).* In the original text a logic network to be designed counts the **even** characters read from an 8-bit INPUT port and, after 1024 even characters, raises an interrupt that toggles a LED (initially off); data read must be stored at FFFF1000h.
 
 **Adaptation to the simulator.** The counting network is the **COUNTER** device (0xB0000000): it increments on each write to CS_INC_COUNTER (0xB0000004), raises INT at the threshold and is cleared by CS_RESET_COUNTER (0xB0000008). The simulator cannot recognize even characters: **software** does it (bit 0). To make testing practical the threshold is **4** instead of 1024. The INPUT port (0x80000000) also raises INT: the handler must tell *who* asked for the interrupt by reading CS_STATUS_INPUT (0x80000004: 1 = data available).
@@ -604,7 +605,7 @@ The handler must:
 - otherwise (interrupt from the counter): clear the counter and **toggle the LED** (CS_SWITCH_LED);
 - return with RFE.
 
-You may use R20..R25 without restoring them. The test sends "ABCDEFGH": the even characters (B, D, F, H) are 4, so at the end the LED must be on (a single toggle) and the counter cleared.`,
+You may use R20..R25 without restoring them. The test sends "ABCDFH": the even characters (B, D, F, H) are 4 and the odd ones (A, C) 2, so at the end the LED must be on (a single toggle) and the counter cleared.`,
     ),
     map: MAP_INPUT_COUNTER,
     maxSteps: 2000,
