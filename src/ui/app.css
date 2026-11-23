@@ -284,3 +284,29 @@ span.cell { display: inline-block; padding: 0 4px; border-radius: 3px; }
 .pipe-legend { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .hazards { padding-left: 0; list-style: none; font-size: 13px; }
 .hazards li { padding: 4px 0; border-top: 1px solid var(--border); }
+
+/* ---------- impara ---------- */
+.cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.cards.numbered { counter-reset: n; }
+.card { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; background: var(--panel-2); }
+.numbered .card::before { counter-increment: n; content: counter(n) '.'; color: var(--accent); font-weight: 700; font-size: 12px; }
+.card-title { font-weight: 650; }
+.card-sub { color: var(--text-2); font-size: 12.5px; }
+.cards li .card { flex-direction: row; justify-content: space-between; flex-wrap: wrap; }
+.cards.numbered li .card { flex-direction: column; }
+.stars { color: var(--warn); letter-spacing: 1px; }
+.ex-h { text-transform: none; letter-spacing: 0; color: var(--text); font-size: 16px; margin: 10px 0 8px; }
+.learn h4 { margin: 12px 0 6px; font-size: 14px; }
+.md p { margin: 6px 0; }
+.md ul { margin: 6px 0; padding-left: 20px; }
+.md code, .tryit code { background: var(--panel-2); padding: 0 4px; border-radius: 3px; font-size: 12.5px; }
+pre.code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; overflow: auto; max-height: 340px; margin: 8px 0; }
+.tryit { background: var(--accent-soft); border-radius: 6px; padding: 4px 10px; margin: 8px 0; display: flex; gap: 6px; align-items: baseline; }
+.hint-box { background: var(--warn-soft); border-radius: 6px; padding: 4px 10px; margin: 6px 0; display: flex; gap: 6px; align-items: baseline; }
+.hints { margin-top: 10px; }
+.checks { list-style: none; padding: 0; margin: 6px 0 0; }
+.checks li { margin: 3px 0; }
+.progress { display: flex; gap: 4px; margin: 4px 0; }
+.progress button { width: 28px; height: 6px; padding: 0; border: none; border-radius: 3px; background: var(--border); }
+.progress button.past { background: var(--accent-soft); }
+.progress button.on { background: var(--accent); }
