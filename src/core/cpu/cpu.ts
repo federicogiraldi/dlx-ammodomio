@@ -71,6 +71,8 @@ export interface CpuSnapshot {
   instret: number;
   cycles: number;
   wasStartup: boolean;
+  /** registri scritti dall'accensione (opzionale: assente nelle istantanee vecchie) */
+  regInit?: Uint8Array;
 }
 
 export class CPU {
@@ -124,6 +126,7 @@ export class CPU {
       regs: this.regs.slice(), pc: this.pc, iar: this.iar, ir: this.ir, mar: this.mar, mdr: this.mdr,
       a: this.a, b: this.b, c: this.c, temp: this.temp, ien: this.ien, halted: this.halted,
       instret: this.instret, cycles: this.cycles, wasStartup: this.wasStartup,
+      regInit: this.regInit.slice(),
     };
   }
 
@@ -131,6 +134,7 @@ export class CPU {
     this.regs.set(s.regs);
     Object.assign(this, { pc: s.pc, iar: s.iar, ir: s.ir, mar: s.mar, mdr: s.mdr, a: s.a, b: s.b, c: s.c, temp: s.temp, ien: s.ien, halted: s.halted, instret: s.instret, cycles: s.cycles });
     this.wasStartup = s.wasStartup;
+    if (s.regInit) this.regInit.set(s.regInit);
   }
 
   /** esegue una istruzione completa (fetch → write-back) e poi controlla INT */

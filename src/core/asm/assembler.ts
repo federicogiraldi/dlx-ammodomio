@@ -248,8 +248,10 @@ function evaluate(expr: string, col: number, ctx: EvalCtx): number {
     let v = primary();
     while (peek() === '*' || peek() === '/') {
       const op = next().t;
+      const opTok = tokens[i - 1];
       const r = primary();
-      v = op === '*' ? Math.imul(v, r) : r === 0 ? 0 : Math.trunc(v / r);
+      if (op === '/' && r === 0) throw new AsmError(txt('Divisione per zero', 'Division by zero'), opTok.c, 1);
+      v = op === '*' ? Math.imul(v, r) : Math.trunc(v / r);
     }
     return v;
   };
@@ -303,17 +305,16 @@ function findCaseInsensitive(map: Map<string, SymbolInfo>, name: string): Symbol
 }
 
 function levenshtein(a: string, b: string): number {
-  const dp = Array.from({ length: b.length + 1 }, (_, i) => i);
+  // distanza di Damerau-Levenshtein (versione OSA): anche lo scambio di due lettere adiacenti costa 1
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
   for (let i = 1; i <= a.length; i++) {
-    let prev = dp[0];
-    dp[0] = i;
     for (let j = 1; j <= b.length; j++) {
-      const tmp = dp[j];
-      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = tmp;
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
     }
   }
-  return dp[b.length];
+  return d[a.length][b.length];
 }
 
 function nearest(word: string, candidates: string[]): string | undefined {
@@ -356,6 +357,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
   const stmts: Stmt[] = [];
   const loc: Record<Section, number> = { text: 0, data: opts.dataBase ?? 0x40000000 };
   let section: Section = 'text';
+  let labelsThisLine: string[] = [];
 
   const diag = (line: number, severity: Severity, text: Txt, from = 0, to = lines[line - 1]?.length ?? 0, fix?: Fix) =>
     diagnostics.push({ line, from, to, severity, text, fix });
@@ -371,6 +373,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
     const lineNo = li + 1;
     let code = stripComment(lines[li]);
     let col = 0;
+    labelsThisLine = [];
     // etichette (anche più di una, anche da sole sulla riga)
     for (;;) {
       const m = code.slice(col).match(/^(\s*)([A-Za-z_.$][\w.$]*)\s*:/);
@@ -387,6 +390,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
         diag(lineNo, 'error', txt(`Etichetta "${name}" già definita alla riga ${prev.line}.`, `Label "${name}" already defined at line ${prev.line}.`), nameCol, nameCol + name.length);
       } else {
         symbols.set(name, { value: loc[section] >>> 0, line: lineNo, kind: 'label' });
+        labelsThisLine.push(name);
       }
       col += m[0].length;
     }
@@ -475,6 +479,7 @@ export function assemble(source: string, opts: AsmOptions = {}): Program {
         const n = ops.length ? ev(ops[0]) : 2;
         const a = 2 ** n;
         loc[section] = Math.ceil(loc[section] / a) * a;
+        for (const l of labelsThisLine) symbols.get(l)!.value = loc[section] >>> 0;
         return;
       }
       case '.equ':
@@ -744,7 +749,7 @@ function encodeStmt(st: Stmt, ctx: EvalCtx, diags: Diagnostic[]): number {
     }
   };
   const rdWarn = (rd: number, p: Piece) => {
-    if (rd === 0 && WRITES_RD.has(def.group)) {
+    if (rd === 0 && (WRITES_RD.has(def.group) || def.mn === 'MOVS2I')) {
       diags.push({
         line: st.line, from: p.col, to: p.col + p.text.length, severity: 'warning',
         text: txt('R0 vale sempre 0: scriverci non ha effetto (nelle slide R0 non può essere destinazione).', 'R0 is always 0: writing to it has no effect.'),

@@ -3,6 +3,7 @@ import { Bus, ByteUndo, validateMap } from './bus/bus';
 import { DeviceConfig, MemoryDevice } from './bus/devices';
 import { CPU, CpuSnapshot, StepResult } from './cpu/cpu';
 import { SimError, Txt, txt } from './util';
+import { disassemble } from './isa/encode';
 
 interface HistoryEntry {
   cpu: CpuSnapshot;
@@ -104,6 +105,8 @@ export class Machine {
     this.bus.undo = [];
     try {
       const r = this.cpu.step();
+      // testo con le etichette del programma (es. "BNEZ R1,loop" invece di "BNEZ R1,0x8")
+      r.text = disassemble(r.word, r.pc, (a) => this.labelAt(a));
       this.history.push({ cpu: snap, devices: devs, bytes: this.bus.undo, result: r });
       if (this.history.length > this.maxHistory) this.history.shift();
       this.trace.push(r);
@@ -129,6 +132,12 @@ export class Machine {
         if (page) page.init[u.addr % 4096] = 0;
       }
     }
+  }
+
+  labelAt(addr: number): string | undefined {
+    if (!this.program) return undefined;
+    for (const [k, v] of this.program.symbols) if (v.kind === 'label' && v.value === addr >>> 0) return k;
+    return undefined;
   }
 
   canStepBack() {
