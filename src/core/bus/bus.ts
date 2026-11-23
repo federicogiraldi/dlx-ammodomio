@@ -176,7 +176,14 @@ export function validateMap(configs: DeviceConfig[]): Txt[] {
 }
 
 export interface Decoding {
+  id: string;
   name: string;
+  /** bit d'indirizzo usati dalla decodifica semplificata (1 = bit controllato) */
+  mask: number;
+  /** bit d'indirizzo usati dalla decodifica completa (tutti quelli sopra la dimensione) */
+  fullMask: number;
+  /** valore richiesto sui bit controllati */
+  value: number;
   range: [number, number];
   /** decodifica completa: bit fissi */
   full: string;
@@ -223,11 +230,40 @@ export function decodeMap(configs: DeviceConfig[]): Decoding[] {
           return { name: c.name, addr: a, expr: `${simplified}·${inner.join('·')}·${c.access === 'R' ? 'MEMRD' : 'MEMWR'}` };
         });
     return {
+      id: b.c.id,
       name: b.c.name,
+      mask,
+      fullMask: b.mask,
+      value: b.value,
       range: [b.c.base >>> 0, (b.c.base + b.c.size - 1) >>> 0],
       full: termsOf(b.mask, b.value),
       simplified,
       chipSelects: css,
     };
   });
+}
+
+/**
+ * Con la decodifica semplificata il dispositivo risponde a tutti gli indirizzi a con (a & mask) == value:
+ * il blocco reale più le sue "copie" (alias). Restituisce come un intervallo allineato [start, start+len)
+ * (len potenza di 2) è coperto da queste zone: tutto, in parte o per niente.
+ */
+export function zoneCoverage(start: number, len: number, mask: number, value: number): 'all' | 'some' | 'none' {
+  const hi = len >= 2 ** 32 ? 0 : (~(len - 1)) >>> 0; // bit fissati dall'intervallo
+  if (((start ^ value) & mask & hi) >>> 0 !== 0) return 'none';
+  return (mask & ~hi) >>> 0 ? 'some' : 'all';
+}
+
+/** Le zone (alias) in cui il dispositivo risponde con la decodifica semplificata, al massimo `limit`. */
+export function aliasZones(d: { mask: number; fullMask: number; value: number }, limit = 16): { zones: number[]; total: number } {
+  const free: number[] = [];
+  for (let b = 31; b >= 0; b--) if (((d.fullMask & ~d.mask) >>> b) & 1) free.push(b);
+  const total = 2 ** free.length;
+  const zones: number[] = [];
+  for (let i = 0; i < Math.min(total, limit); i++) {
+    let a = d.value & d.fullMask;
+    free.forEach((b, j) => { if ((i >> (free.length - 1 - j)) & 1) a |= 1 << b; });
+    zones.push(a >>> 0);
+  }
+  return { zones, total };
 }
